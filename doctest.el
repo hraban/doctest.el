@@ -28,6 +28,7 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'dash)
 (require 'loadhist)
 
 ;; NOT used in code, for testing
@@ -77,10 +78,7 @@
 
 (defun doctest--function-tests (function)
   "Return tests in FUNCTION's docstring."
-  ;; this is dash’s -some-> in a nutshell
-  (let ((docstr (documentation function 'raw)))
-    (when docstr
-      (doctest--docstring-tests docstr))))
+  (-some-> (documentation function 'raw) doctest--docstring-tests))
 
 (defun doctest--feature-functions (feature)
   (let (funcs)

@@ -28,4 +28,4 @@ emacs -Q --batch \
 # Run doctests
 emacs -Q --batch \
 	  --eval "$INIT_PACKAGE_EL" \
-	  -L . -l doctest f doctest-batch-check-feature doctest
+	  -L . -l doctest -f doctest-batch-check-feature doctest
