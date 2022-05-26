@@ -19,7 +19,5 @@ jobs:
         version: ${{ matrix.emacs_version }}
 
     - uses: actions/checkout@v1
-    - name: Byte compile
-      run: emacs -Q --batch -L . --eval "(setq byte-compile-error-on-warn t)" -f batch-byte-compile doctest.el
-    - name: Try doctest-batch-check-feature
-      run: emacs -Q --batch -L . -l doctest f doctest-batch-check-feature doctest
+    - name: Run tests
+      run: ./run-tests.sh
