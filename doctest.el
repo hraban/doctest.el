@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2020, 2022  Xu Chunyang, Hraban Luyat
 
-;; Author: Xu Chunyang
+;; Author: Xu Chunyang, Hraban Luyat
 ;; Homepage: https://github.com/hraban/doctest.el
 ;; Package-Requires: ((emacs "25"))
 ;; Keywords: lisp, tools
@@ -48,20 +48,73 @@
 
 (defun doctest--eval (expr)
   (condition-case e
-      (list nil (eval (read-from-string expr) 'lexical))
-    (error (list e nil))))
+      (cons nil (doctest--capture (lambda () (eval expr 'lexical))))
+    (error (list e nil nil))))
 
-(defvar doctest--rex
-  (let ((sexp-line (rx bol "(" (* not-newline) ")" eol)))
-    (rx (group-n 1 (regexp sexp-line)
-                   (* "\n" (regexp sexp-line)))
-        (? "\n" (* " ") "->" (* " ") (group-n 2 (* not-newline)))
-        "\n" (* " ") "=>" (* " ") (group-n 3 (* not-newline))))
-  "Regular expression to match a doctest, including potential message output")
+(defun doctest--looking-at (rex)
+  "Like ‘looking-at’ but move to end of match, if found."
+  (when (looking-at rex)
+    (goto-char (match-end 0))))
+
+(defun doctest--trim-newline (s)
+  "Remove trailing newline from S, if any"
+  (replace-regexp-in-string "\n$" "" s))
+
+(defun doctest--read-msg-fixture (&optional result)
+  "Get the message fixture in this buffer from point, if any.
+
+If the buffer, at point, looks like this:
+
+-> foo
+-> bar
+
+This function returns \"foo\nbar\"
+
+(with-temp-buffer
+  (insert \"-> foo\n-> bar\")
+  (goto-char (point-min))
+  (doctest--read-msg-fixture))
+=> \"foo\nbar\"
+
+It also advances the pointer to the first line that isn’t a match (so this is a
+NOP if there is no match).
+"
+  (if (doctest--looking-at (rx (* " ") "-> "))
+      (let ((old (point)))
+        (forward-line)
+        (doctest--read-msg-fixture (cons (buffer-substring-no-properties old (point)) result)))
+    (->> result
+         reverse
+         (apply #'concat)
+         doctest--trim-newline)))
+
+(defun doctest--read-line ()
+  "Read a sexp from the point in buffer and move to the line following it.
+
+If the pointer is not on a valid sexp, move forward one line and return NIL."
+  (let ((sexp (condition-case e (read (current-buffer))
+                (invalid-read-syntax nil))))
+    (forward-line)
+    sexp))
 
 (defun doctest--next-doctest ()
-  (when (search-forward-regexp doctest--rex nil t)
-    (--map (-some-> it match-string-no-properties read-from-string) '(1 2 3))))
+  "Find the next doctest in this buffer.
+
+Intended to be used on a temp buffer whose entire contents are set to the
+docstring. Returns NIL if no doctest is found."
+  (when (search-forward-regexp (rx bol (* " ") "(") nil t)
+    ;; We’re after the match, meaning after the opening (. Go back to the start
+    ;; of the entire sexp.
+    (backward-char)
+    (if-let ((expr (doctest--read-line)))
+        (let ((msg (doctest--read-msg-fixture)))
+          (if (doctest--looking-at (rx (* " ") "=> "))
+              (list expr (doctest--read-line) msg)
+            ;; This didn’t have a result fixture, so it’s not a doctest. Keep
+            ;; looking.
+            (doctest--next-doctest)))
+      ;; This wasn’t a valid sexp. Keep looking.
+      (doctest--next-doctest))))
 
 (defun doctest--collect-while-true (f)
   "Call function F and collect its results while it returns a non-NIL value"
@@ -80,46 +133,86 @@
   "Return tests in FUNCTION's docstring."
   (-some-> (documentation function 'raw) doctest--docstring-tests))
 
+(cl-defmacro doctest--with-around ((f advice) &body body)
+  "Advise function F with ADVICE (around) only in the scope of this BODY"
+  (declare (indent 1))
+  `(progn
+     (advice-add ,f :around ,advice)
+     (unwind-protect
+         (progn ,@body)
+       (advice-remove ,f ,advice))))
+
+(defun doctest--capture (f)
+  "Run f and capture its ‘message’ output, returning (val output).
+
+(doctest--capture (lambda () (message \"foo%s\" \"bar\") (message \"quu\") 3))
+=> (3 \"foobar\nquu\")
+
+"
+  (with-temp-buffer
+    (doctest--with-around ('message (lambda (orig &rest args)
+                                      (ignore orig)
+                                      (unless (= (point) (point-min))
+                                        (insert "\n"))
+                                      (let ((text (apply #'format-message args)))
+                                        (insert text)
+                                        ;; Message returns the inserted string
+                                        text)))
+      (list (funcall f) (buffer-string)))))
+
+(defun doctest--check-doctest (test message)
+  (pcase-let* ((print-quoted t)
+               (`(,expr ,want-val ,want-msg) test)
+               (`(,err ,got-val ,got-msg) (doctest--eval expr)))
+    (cond
+     (err
+      (funcall message "FAIL %s: got error: %s" expr (error-message-string err))
+      nil)
+     ((not (equal got-val want-val))
+      (funcall message "FAIL %s: return value mis-match: got: %S want: %S" expr got-val want-val)
+      nil)
+     ((not (equal got-msg want-msg))
+      (funcall message "FAIL %s: message output mis-match: got: %S want: %S" expr got-msg want-msg)
+      nil)
+     (t
+      (funcall message "pass %s" (if (consp expr) (car expr) expr))
+      t))))
+
 (defun doctest--feature-functions (feature)
-  (let (funcs)
-    (dolist (entry (feature-symbols feature))
-      (pcase entry
-        (`(defun . ,func)
-         (push func funcs))))
-    (nreverse funcs)))
+  (->> feature
+       feature-symbols
+       (--map (pcase it
+                (`(defun . ,func) func)))
+       (cl-remove nil)))
 
 (defun doctest--feature-tests (feature)
-  (cl-mapcan #'doctest--function-tests
-             (doctest--feature-functions feature)))
+  (cl-mapcan 'doctest--function-tests (doctest--feature-functions feature)))
+
+(defun doctest-check-function (f)
+  "Doctest a single function.
+
+Returns nil if there are failing tests, non-nil otherwise. Notably, if there are
+no tests, this returns non-nil.
+"
+  (interactive "a")
+  (--every-p (doctest--check-doctest it #'message) (doctest--function-tests f)))
+
+(defun doctest--check-multiple (tests)
+  (let* ((total (length tests))
+         (passed (cl-loop for test in tests
+                          for i from 1
+                          for msg = (lambda (fmt &rest args)
+                                      (apply #'message (concat "[%d/%d] " fmt) i total args))
+                          count (doctest--check-doctest test msg)))
+         (failed (- total passed)))
+    (message "Total: %d, Pass: %d, Fail: %d"
+             total passed failed)
+    (list    total passed failed)))
 
 (defun doctest-check-feature (feature)
   "Check functions defined in FEATURE."
   (interactive (list (read-feature "Check feature: ")))
-  (let* ((tests (doctest--feature-tests feature))
-         (total (length tests))
-         passed)
-    (cl-loop for test in tests
-             for i from 1
-             for progress = (format "[%d/%d]" i total)
-             do
-             (cl-destructuring-bind (expr msg want) test
-               (pcase (doctest--eval expr)
-                 (`(nil ,got)
-                  (cond
-                   ((equal got want)
-                    (push test passed)
-                    (message "%s %s pass" progress (car expr)))
-                   (t
-                    (let ((print-quoted t))
-                      (message "%s %s got: %s want: %s" progress expr got want)))))
-                 (`(,err ,_)
-                  (let ((print-quoted t))
-                    (message "%s %s got error: %s"
-                             progress
-                             expr (error-message-string err)))))))
-    (message "Total: %d, Pass: %d, Fail: %d"
-             total (length passed) (- total (length passed)))
-    (list    total (length passed) (- total (length passed)))))
+  (doctest--check-multiple (doctest--feature-tests feature)))
 
 ;; emacs -Q --batch -L . -l doctest -f doctest-batch-check-feature doctest
 (defun doctest-batch-check-feature ()
