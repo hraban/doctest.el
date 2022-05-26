@@ -27,24 +27,55 @@
 
 ;;; Code:
 
+;; Some mock functions to demonstrate how this works
+
+(defun doctest--test1 (lst)
+  "Return the length of list LST.
+
+(doctest--test1 '())
+=> 0
+
+(doctest--test1 '(a))
+=> 1
+
+(doctest--test1 '(a b))
+=> 2
+"
+  (length lst))
+
+(defun doctest--test2 (temp)
+  "Talk about the weather
+
+  (doctest--test2 'cold)
+  -> It’s cold outside
+  => brr
+
+  (doctest--test2 'hot)
+  -> It’s hot today
+  -> ... very hot!
+  => pfew
+  "
+  (pcase temp
+    ('cold (message "It's cold outside") 'brr)
+    ('hot (message "It's hot today") (message "... very hot!") 'pfew)))
+
+(defun doctest--test3 (x y)
+  "Add two numbers.
+
+  (setf a 1)
+  (setf b 2)
+  (doctest--test3 a b)
+  => 3
+"
+  (+ x y))
+
+;; Actual code below
+
 (require 'cl-lib)
 (require 'dash)
 (require 'loadhist)
 
-;; NOT used in code, for testing
-(defun doctest--length (lst)
-  "Return the length of list LST.
-
-(doctest--length '())
-=> 0
-
-(doctest--length '(a))
-=> 1
-
-(doctest--length '(a b))
-=> 2
-"
-  (length lst))
+(defvar doctest--test-start (rx bol (* " ") "("))
 
 (defun doctest--eval (expr)
   (condition-case e
@@ -102,19 +133,28 @@ If the pointer is not on a valid sexp, move forward one line and return NIL."
 
 Intended to be used on a temp buffer whose entire contents are set to the
 docstring. Returns NIL if no doctest is found."
-  (when (search-forward-regexp (rx bol (* " ") "(") nil t)
-    ;; We’re after the match, meaning after the opening (. Go back to the start
-    ;; of the entire sexp.
-    (backward-char)
-    (if-let ((expr (doctest--read-line)))
+  (when (search-forward-regexp doctest--test-start nil t)
+    ;; The rest actual reader loop re-uses the regex which is anchored to the
+    ;; start-of-line, so reset the point to help it out.
+    (beginning-of-line)
+    (let ((code (doctest--collect-while-true (lambda ()
+                                               (when (doctest--looking-at doctest--test-start)
+                                                 (backward-char)
+                                                 (doctest--read-line))))))
+      (if (-> code length (= 0))
+          ;; This wasn’t a valid sexp. Keep looking.
+          (doctest--next-doctest)
         (let ((msg (doctest--read-msg-fixture)))
           (if (doctest--looking-at (rx (* " ") "=> "))
-              (list expr (doctest--read-line) msg)
+              (list (pcase code
+                      ;; Unpack if it’s just one sexp
+                      (`(,sexp) sexp)
+                      ;; Wrap it in a progn if it’s multi line
+                      (_ `(progn ,@code)))
+                    (doctest--read-line) msg)
             ;; This didn’t have a result fixture, so it’s not a doctest. Keep
             ;; looking.
-            (doctest--next-doctest)))
-      ;; This wasn’t a valid sexp. Keep looking.
-      (doctest--next-doctest))))
+            (doctest--next-doctest)))))))
 
 (defun doctest--collect-while-true (f)
   "Call function F and collect its results while it returns a non-NIL value"
