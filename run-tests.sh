@@ -1,4 +1,4 @@
-#!/usr/bin/env sh -e
+#!/usr/bin/env -S sh -e
 
 # Mostly copied from
 # https://github.com/purcell/package-lint/blob/f16b8a131ff8443606b472aab4cefccb6ed66986/run-tests.sh
