@@ -60,8 +60,7 @@
 
 (defun doctest--next-doctest ()
   (when (search-forward-regexp doctest--rex nil t)
-    (mapcar (lambda (group)
-              ((match-string-no-properties '(1 2 3))))
+    (--map (-some-> it match-string-no-properties read-from-string) '(1 2 3))))
 
 (defun doctest--collect-while-true (f)
   "Call function F and collect its results while it returns a non-NIL value"

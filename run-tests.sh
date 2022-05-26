@@ -1,4 +1,4 @@
-#!/usr/bin/env -S sh -e
+#!/usr/bin/env -S sh -e -x
 
 # Mostly copied from
 # https://github.com/purcell/package-lint/blob/f16b8a131ff8443606b472aab4cefccb6ed66986/run-tests.sh
@@ -20,8 +20,12 @@ emacs -Q -batch --eval "$INIT_PACKAGE_EL"
 
 
 # Byte compile
-emacs -Q --batch -L . --eval "(setq byte-compile-error-on-warn t)" -f batch-byte-compile doctest.el
+emacs -Q --batch \
+	  --eval "$INIT_PACKAGE_EL" \
+	  -L . --eval "(setq byte-compile-error-on-warn t)" -f batch-byte-compile doctest.el
 
 
 # Run doctests
-emacs -Q --batch -L . -l doctest f doctest-batch-check-feature doctest
+emacs -Q --batch \
+	  --eval "$INIT_PACKAGE_EL" \
+	  -L . -l doctest f doctest-batch-check-feature doctest
