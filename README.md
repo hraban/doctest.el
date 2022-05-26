@@ -1,8 +1,8 @@
-# el-doctest - Run tests in Elisp docstring
+# doctest - Run tests in Elisp docstring
 
 ## Example
 
-For example, with this Emacs Lisp file, `M-x el-doctest-check-feature foo` will check if `(foo-add 1 2)` equals to `3`.
+For example, with this Emacs Lisp file, `M-x doctest-check-feature foo` will check if `(foo-add 1 2)` equals to `3`.
 
 ```emacs-lisp
 ;;; foo.el --- Foo  -*- lexical-binding: t; -*-
@@ -34,7 +34,7 @@ The test is considered if two adjacent lines matches the regexp:
 ```
 
 Unfortunately, we can't (or shouldn't) put `(` at the beginning of a line (see
-the following quote), and because I don't like `\(`, el-doctest.el recognizes
+the following quote), and because I don't like `\(`, doctest.el recognizes
 whitespaces before `(`, not `\`.
 
 > If a line in a documentation string begins with an
@@ -54,12 +54,12 @@ whitespaces before `(`, not `\`.
 
 ### Run tests interactively
 
-use `M-x el-doctest-check-feature FEATURE` to check functions defined in `FEATURE`.
+use `M-x doctest-check-feature FEATURE` to check functions defined in `FEATURE`.
 
 ### Run tests in batch mode
 
-Use `el-doctest-batch-check-feature`, e.g., to check features `foo` and `bar`
+Use `doctest-batch-check-feature`, e.g., to check features `foo` and `bar`
 
 ``` shell
-emacs -Q --batch -L /path/to/el-doctest -l el-doctest -f el-doctest-batch-check-feature foo bar
+emacs -Q --batch -L /path/to/doctest -l doctest -f doctest-batch-check-feature foo bar
 ```

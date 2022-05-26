@@ -1,9 +1,9 @@
-;;; el-doctest.el --- Run tests in Elisp docstring  -*- lexical-binding: t; -*-
+;;; doctest.el --- Run tests in Elisp docstring  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2020  Xu Chunyang
+;; Copyright (C) 2020, 2022  Xu Chunyang, Hraban Luyat
 
 ;; Author: Xu Chunyang
-;; Homepage: https://github.com/xuchunyang/el-doctest
+;; Homepage: https://github.com/hraban/doctest.el
 ;; Package-Requires: ((emacs "25"))
 ;; Keywords: lisp, tools
 ;; Version: 0
@@ -31,28 +31,28 @@
 (require 'loadhist)
 
 ;; NOT used in code, for testing
-(defun el-doctest--length (lst)
+(defun doctest--length (lst)
   "Return the length of list LST.
 
-  (el-doctest--length '())
+  (doctest--length '())
   ;; => 0
 
-  (el-doctest--length '(a))
+  (doctest--length '(a))
   ;; => 1
 
-  (el-doctest--length '(a b))
+  (doctest--length '(a b))
   ;; => 2
 "
   (length lst))
 
-(defun el-doctest--eval (expr)
+(defun doctest--eval (expr)
   (let* ((err nil)
          (got (condition-case e
                   (eval expr 'lexical)
                 (error (setq err e)))))
     (list err got)))
 
-(defun el-doctest--function-tests (function)
+(defun doctest--function-tests (function)
   "Return tests in FUNCTION's docstring."
   (let* ((docstring (documentation function 'raw))
          (lines (and docstring (split-string docstring "\n" t)))
@@ -75,7 +75,7 @@
           (cl-incf i 1)))))
     (nreverse tests)))
 
-(defun el-doctest--feature-functions (feature)
+(defun doctest--feature-functions (feature)
   (let (funcs)
     (dolist (entry (feature-symbols feature))
       (pcase entry
@@ -83,14 +83,14 @@
          (push func funcs))))
     (nreverse funcs)))
 
-(defun el-doctest--feature-tests (feature)
-  (cl-mapcan #'el-doctest--function-tests
-             (el-doctest--feature-functions feature)))
+(defun doctest--feature-tests (feature)
+  (cl-mapcan #'doctest--function-tests
+             (doctest--feature-functions feature)))
 
-(defun el-doctest-check-feature (feature)
+(defun doctest-check-feature (feature)
   "Check functions defined in FEATURE."
   (interactive (list (read-feature "Check feature: ")))
-  (let* ((tests (el-doctest--feature-tests feature))
+  (let* ((tests (doctest--feature-tests feature))
          (total (length tests))
          passed)
     (cl-loop for test in tests
@@ -99,7 +99,7 @@
              do
              (pcase test
                (`(,expr . ,want)
-                (pcase (el-doctest--eval expr)
+                (pcase (doctest--eval expr)
                   (`(nil ,got)
                    (cond
                     ((equal got want)
@@ -117,8 +117,8 @@
              total (length passed) (- total (length passed)))
     (list    total (length passed) (- total (length passed)))))
 
-;; emacs -Q --batch -L . -l el-doctest -f el-doctest-batch-check-feature el-doctest
-(defun el-doctest-batch-check-feature ()
+;; emacs -Q --batch -L . -l doctest -f doctest-batch-check-feature doctest
+(defun doctest-batch-check-feature ()
   (unless noninteractive
     (user-error "This function is only for use in batch mode"))
   (let ((total 0)
@@ -127,7 +127,7 @@
         (features 0))
     (dolist (feature (delete-dups (mapcar #'intern command-line-args-left)))
       (cl-incf features)
-      (pcase-exhaustive (el-doctest-check-feature feature)
+      (pcase-exhaustive (doctest-check-feature feature)
         (`(,total_ ,passed_ ,failed_)
          (cl-incf total  total_)
          (cl-incf passed passed_)
@@ -138,5 +138,5 @@
       (message "Test failed"))
     (kill-emacs (if (zerop failed) 0 1))))
 
-(provide 'el-doctest)
-;;; el-doctest.el ends here
+(provide 'doctest)
+;;; doctest.el ends here
