@@ -11,52 +11,58 @@ For example, with this Emacs Lisp file, `M-x doctest-check-feature foo` will che
   "Add X to Y.
 
   (foo-add 1 2)
-  ;; => 3"
+  => 3"
   (+ x y))
 
 (provide 'foo)
 ```
 
-## How to write tests?
+You can also test for message output:
+
+```emacs-lisp
+;;; foo.el --- Foo  -*- lexical-binding: t; -*-
+
+(defun foo-say (temp)
+  "Talk about the weather
+
+  (foo-say 'cold)
+  -> It’s cold outside
+  => brr
+
+  (foo-say 'hot)
+  -> It’s hot today
+  -> ... very hot!
+  => pfew
+  "
+  (pcase temp
+    ('cold (message "It's cold outside") 'brr)
+    ('hot (message "It's hot today") (message "... very hot!") 'pfew)))
+
+(provide 'foo)
+```
+
+Note the apostrophe (`’`) versus quote (`'`): that’s intentional. Emacs’
+`message` function transforms quotes to apostrophes.
+
+## Syntax
 
 Use this format:
 
-    (func arg1 arg2 ...)
-    ;; => RESULT
-
-The test is considered if two adjacent lines matches the regexp:
-
-``` emacs-lisp
-;; first line matches
-(rx bol (* space) "(")
-;; second line matches
-(rx bol (* space) ";; => ")
+```
+(my-func arg1 arg2 ...)
+-> message output (optional)
+=> RESULT
 ```
 
-Unfortunately, we can't (or shouldn't) put `(` at the beginning of a line (see
-the following quote), and because I don't like `\(`, doctest.el recognizes
-whitespaces before `(`, not `\`.
+All functions must exist in a file that provides a feature.
 
-> If a line in a documentation string begins with an
-> open-parenthesis, write a backslash before the open-parenthesis,
-> like this:
->
->      The argument FOO can be either a number
->      \(a buffer position) or a string (a file name).
->
-> This prevents the open-parenthesis from being treated as the start
-> of a defun (*note Defuns: (emacs)Defuns.).
->
->
-> [(elisp) Documentation Tips](https://www.gnu.org/software/emacs/manual/html_node/elisp/Documentation-Tips.html)
+## Running Tests
 
-## How to run tests?
-
-### Run tests interactively
+### Interactively
 
 use `M-x doctest-check-feature FEATURE` to check functions defined in `FEATURE`.
 
-### Run tests in batch mode
+### In Batch Mode
 
 Use `doctest-batch-check-feature`, e.g., to check features `foo` and `bar`
 

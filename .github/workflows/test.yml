@@ -8,10 +8,8 @@ jobs:
     strategy:
       matrix:
         emacs_version:
-          - 25.1
-          - 25.3
-          - 26.1
-          - 26.3
+          - 27.2
+          - 28.1
           - snapshot
     steps:
     - uses: purcell/setup-emacs@master
@@ -19,7 +17,5 @@ jobs:
         version: ${{ matrix.emacs_version }}
 
     - uses: actions/checkout@v1
-    - name: Byte compile
-      run: emacs -Q --batch -L . --eval "(setq byte-compile-error-on-warn t)" -f batch-byte-compile doctest.el
-    - name: Try doctest-batch-check-feature
-      run: emacs -Q --batch -L . -l doctest f doctest-batch-check-feature doctest
+    - name: Run tests
+      run: ./run-tests.sh
