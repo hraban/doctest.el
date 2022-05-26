@@ -124,6 +124,7 @@ NOP if there is no match).
 
 If the pointer is not on a valid sexp, move forward one line and return NIL."
   (let ((sexp (condition-case e (read (current-buffer))
+                (ignore e)
                 (invalid-read-syntax nil))))
     (forward-line)
     sexp))
