@@ -22,10 +22,10 @@ emacs -Q -batch --eval "$INIT_PACKAGE_EL"
 # Byte compile
 emacs -Q --batch \
 	  --eval "$INIT_PACKAGE_EL" \
-	  -L . --eval "(setq byte-compile-error-on-warn t)" -f batch-byte-compile doctest.el
+	  --eval "(setq byte-compile-error-on-warn t)" -f batch-byte-compile *.el
 
 
 # Run doctests
 emacs -Q --batch \
 	  --eval "$INIT_PACKAGE_EL" \
-	  -L . -l doctest -f doctest-batch-check-feature doctest
+	  -l doctest.el -l doctest-test.el -f doctest-batch-check-feature doctest doctest-test

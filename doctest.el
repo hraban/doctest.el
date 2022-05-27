@@ -28,50 +28,6 @@
 ;;; Code:
 
 ;;;;
-;;;; EXAMPLES
-;;;;
-
-(defun doctest--test1 (lst)
-  "Return the length of list LST.
-
-(doctest--test1 '())
-=> 0
-
-(doctest--test1 '(a))
-=> 1
-
-(doctest--test1 '(a b))
-=> 2
-"
-  (length lst))
-
-(defun doctest--test2 (temp)
-  "Talk about the weather
-
-  (doctest--test2 'cold)
-  -> It’s cold outside
-  => brr
-
-  (doctest--test2 'hot)
-  -> It’s hot today
-  -> ... very hot!
-  => pfew
-  "
-  (pcase temp
-    ('cold (message "It's cold outside") 'brr)
-    ('hot (message "It's hot today") (message "... very hot!") 'pfew)))
-
-(defun doctest--test3 (x y)
-  "Add two numbers.
-
-  (setf a 1)
-  (setf b 2)
-  (doctest--test3 a b)
-  => 3
-"
-  (+ x y))
-
-;;;;
 ;;;; PARSING TESTS FROM DOCSTRINGS
 ;;;;
 
@@ -80,11 +36,6 @@
 (require 'loadhist)
 
 (defvar doctest--test-start (rx bol (* " ") "("))
-
-(defun doctest--eval (expr)
-  (condition-case e
-      (cons nil (doctest--capture (lambda () (eval expr 'lexical))))
-    (error (list e nil nil))))
 
 (defun doctest--looking-at (rex)
   "Like ‘looking-at’ but move to end of match, if found."
@@ -319,4 +270,5 @@ example:
        (ert-run-tests-batch-and-exit `(member ,@it))))
 
 (provide 'doctest)
+
 ;;; doctest.el ends here
