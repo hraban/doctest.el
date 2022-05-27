@@ -107,6 +107,10 @@ This function returns \"foo\nbar\"
   (doctest--read-msg-fixture))
 => \"foo\nbar\"
 
+(with-temp-buffer
+  (doctest--read-msg-fixture))
+=> nil
+
 It also advances the pointer to the first line that isn’t a match (so this is a
 NOP if there is no match).
 "
@@ -114,10 +118,10 @@ NOP if there is no match).
       (let ((old (point)))
         (forward-line)
         (doctest--read-msg-fixture (cons (buffer-substring-no-properties old (point)) result)))
-    (->> result
-         reverse
-         (apply #'concat)
-         doctest--trim-newline)))
+    (-some->> result
+              reverse
+              (apply #'concat)
+              doctest--trim-newline)))
 
 (defun doctest--read-line ()
   "Read a sexp from the point in buffer and move to the line following it.
@@ -183,23 +187,31 @@ docstring. Returns NIL if no doctest is found."
          (progn ,@body)
        (advice-remove ,f ,advice))))
 
-(defun doctest--capture (f)
+(defun doctest--capture (f &rest args)
   "Run f and capture its ‘message’ output, returning (val output).
 
 (doctest--capture (lambda () (message \"foo%s\" \"bar\") (message \"quu\") 3))
 => (3 \"foobar\nquu\")
 
+(doctest--capture (lambda ()))
+=> (nil nil)
+
+(doctest--capture 'identity 4)
+=> (4 nil)
+
 "
   (with-temp-buffer
-    (doctest--with-around ('message (lambda (orig &rest args)
-                                      (ignore orig)
-                                      (unless (= (point) (point-min))
-                                        (insert "\n"))
-                                      (let ((text (apply #'format-message args)))
-                                        (insert text)
-                                        ;; Message returns the inserted string
-                                        text)))
-      (list (funcall f) (buffer-string)))))
+    (let (wrote-something)
+      (doctest--with-around ('message (lambda (orig &rest args)
+                                        (ignore orig)
+                                        (setf wrote-something t)
+                                        (unless (= (point) (point-min))
+                                          (insert "\n"))
+                                        (let ((text (apply #'format-message args)))
+                                          (insert text)
+                                          ;; Message returns the inserted string
+                                          text)))
+        (list (apply f args) (when wrote-something (buffer-string)))))))
 
 (defun doctest--check-doctest (test message)
   (pcase-let* ((print-quoted t)
