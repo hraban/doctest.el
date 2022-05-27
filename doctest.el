@@ -27,7 +27,9 @@
 
 ;;; Code:
 
-;; Some mock functions to demonstrate how this works
+;;;;
+;;;; EXAMPLES
+;;;;
 
 (defun doctest--test1 (lst)
   "Return the length of list LST.
@@ -69,7 +71,9 @@
 "
   (+ x y))
 
-;; Actual code below
+;;;;
+;;;; PARSING TESTS FROM DOCSTRINGS
+;;;;
 
 (require 'cl-lib)
 (require 'dash)
@@ -178,6 +182,10 @@ docstring. Returns NIL if no doctest is found."
   "Return tests in FUNCTION's docstring."
   (-some-> (documentation function 'raw) doctest--docstring-tests))
 
+;;;;
+;;;; RUNNING TESTS
+;;;;
+
 (cl-defmacro doctest--with-around ((f advice) &body body)
   "Advise function F with ADVICE (around) only in the scope of this BODY"
   (declare (indent 1))
@@ -213,80 +221,102 @@ docstring. Returns NIL if no doctest is found."
                                           text)))
         (list (apply f args) (when wrote-something (buffer-string)))))))
 
-(defun doctest--check-doctest (test message)
-  (pcase-let* ((print-quoted t)
-               (`(,expr ,want-val ,want-msg) test)
-               (`(,err ,got-val ,got-msg) (doctest--eval expr)))
-    (cond
-     (err
-      (funcall message "FAIL %s: got error: %s" expr (error-message-string err))
-      nil)
-     ((not (equal got-val want-val))
-      (funcall message "FAIL %s: return value mis-match: got: %S want: %S" expr got-val want-val)
-      nil)
-     ((not (equal got-msg want-msg))
-      (funcall message "FAIL %s: message output mis-match: got: %S want: %S" expr got-msg want-msg)
-      nil)
-     (t
-      (funcall message "pass %s" (if (consp expr) (car expr) expr))
-      t))))
+;;;;
+;;;; DOCTESTS -> ERT TESTS
+;;;;
+
+(defmacro doctest--ert-func-helper (fsym)
+  (interactive "a")
+  `(ert-deftest ,fsym ()
+     :tags '(doctest)
+     ,(format "Doctests for ‘%s’" fsym)
+     (dolist (test (doctest--function-tests ',fsym))
+       (pcase-let* ((`(,expr ,want-val ,want-msg) test)
+                    (`(,got-val ,got-msg) (doctest--capture (lambda () (eval expr 'lexical)))))
+         (should (equal want-val got-val))
+         (should (equal want-msg got-msg))))))
+
+(defun doctest--ert-func (fsym)
+  "Transform all tests in this feature to ERT tests.
+
+We’re in a function, and we want to evaluate a macro with runtime
+parameters. Fundamentally we need to call eval because otherwise
+the macro would be expanded at runtime. I don’t want to expand at
+runtime because I want to allow users to call this function
+interactively, after loading their file and their functions. On
+the other hand, I can’t turn everything into a function down the
+call stack, because at some point we use ert-deftest, which is a
+macro."
+  (eval `(doctest--ert-func-helper ,fsym)))
 
 (defun doctest--feature-functions (feature)
+  "Get all top-level defun symbols defined in FEATURE.
+
+Includes macros.
+"
   (->> feature
        feature-symbols
        (--map (pcase it
                 (`(defun . ,func) func)))
        (cl-remove nil)))
 
-(defun doctest--feature-tests (feature)
-  (cl-mapcan 'doctest--function-tests (doctest--feature-functions feature)))
-
-(defun doctest-check-function (f)
+(defun doctest-check-function (fsym)
   "Doctest a single function.
 
-Returns nil if there are failing tests, non-nil otherwise. Notably, if there are
-no tests, this returns non-nil.
+Runs the tests in ERT.
 "
   (interactive "a")
-  (--every-p (doctest--check-doctest it #'message) (doctest--function-tests f)))
+  (doctest--ert-func fsym)
+  (ert fsym))
 
-(defun doctest--check-multiple (tests)
-  (let* ((total (length tests))
-         (passed (cl-loop for test in tests
-                          for i from 1
-                          for msg = (lambda (fmt &rest args)
-                                      (apply #'message (concat "[%d/%d] " fmt) i total args))
-                          count (doctest--check-doctest test msg)))
-         (failed (- total passed)))
-    (message "Total: %d, Pass: %d, Fail: %d"
-             total passed failed)
-    (list    total passed failed)))
+(defun doctest-register-feature (feature)
+  "Register all doctests in FEATURE as ert tests, without running.
 
-(defun doctest-check-feature (feature)
-  "Check functions defined in FEATURE."
+Doesn’t run the actual tests. Use this if you want to control
+running of the ert tests yourself.
+
+Returns a list of all function names, which also are the test names.
+"
   (interactive (list (read-feature "Check feature: ")))
-  (doctest--check-multiple (doctest--feature-tests feature)))
+  (->> feature
+       doctest--feature-functions
+       (cl-mapc 'doctest--ert-func)))
 
-;; emacs -Q --batch -L . -l doctest -f doctest-batch-check-feature doctest
+(cl-defun doctest-check-feature (feature)
+  "Check doctests of all functions defined in FEATURE using ert.
+
+Both registers and runs all tests in this feature.
+
+Uses the TEST function to actually run the tests, which is (ert
+...) by default.
+"
+  (interactive (list (read-feature "Check feature: ")))
+  (--> (doctest-register-feature feature)
+       (ert `(member ,@it))))
+
 (defun doctest-batch-check-feature ()
-  (unless noninteractive
-    (user-error "This function is only for use in batch mode"))
-  (let ((total 0)
-        (passed 0)
-        (failed 0)
-        (features 0))
-    (dolist (feature (delete-dups (mapcar #'intern command-line-args-left)))
-      (cl-incf features)
-      (pcase-exhaustive (doctest-check-feature feature)
-        (`(,total_ ,passed_ ,failed_)
-         (cl-incf total  total_)
-         (cl-incf passed passed_)
-         (cl-incf failed failed_)))
-      (message nil))
-    (if (zerop failed)
-        (message "Test passed")
-      (message "Test failed"))
-    (kill-emacs (if (zerop failed) 0 1))))
+  "Helper function to run all doctests for a feature non-interactively.
+
+Usage:
+
+  emacs --batch -l ert -l doctest.el doctest-batch-check-feature feat-1 feat-2
+
+You will need to load dash somehow, probably using ‘package-initialize’.
+
+If you want to roll your doctests into a larger test suite and run them all,
+non-interactively, at the same time, use ‘doctest-register-feature’. For
+example:
+
+  emacs --batch \\
+        ... \\
+        --eval \"(doctest-register-feature 'my-feature)\" \\
+        ... \\
+        -f ert-run-tests-batch-and-exit
+"
+  (--> command-line-args-left
+       (mapcar 'intern it)
+       (mapcan 'doctest-register-feature it)
+       (ert-run-tests-batch-and-exit `(member ,@it))))
 
 (provide 'doctest)
 ;;; doctest.el ends here
