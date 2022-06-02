@@ -51,13 +51,13 @@
 
 If the buffer, at point, looks like this:
 
--> foo
--> bar
+>> foo
+>> bar
 
 This function returns \"foo\nbar\"
 
 (with-temp-buffer
-  (insert \"-> foo\n-> bar\")
+  (insert \">> foo\n>> bar\")
   (goto-char (point-min))
   (doctest--read-msg-fixture))
 => \"foo\nbar\"
@@ -69,7 +69,7 @@ This function returns \"foo\nbar\"
 It also advances the pointer to the first line that isn’t a match (so this is a
 NOP if there is no match).
 "
-  (if (doctest--looking-at (rx (* " ") "-> "))
+  (if (doctest--looking-at (rx (* " ") ">> "))
       (let ((old (point)))
         (forward-line)
         (doctest--read-msg-fixture (cons (buffer-substring-no-properties old (point)) result)))

@@ -26,12 +26,12 @@ You can also test for message output:
   "Talk about the weather
 
   (foo-say 'cold)
-  -> It’s cold outside
+  >> It’s cold outside
   => brr
 
   (foo-say 'hot)
-  -> It’s hot today
-  -> ... very hot!
+  >> It’s hot today
+  >> ... very hot!
   => pfew
   "
   (pcase temp
@@ -50,7 +50,7 @@ Use this format:
 
 ```
 (my-func arg1 arg2 ...)
--> message output (optional)
+>> message output (optional)
 => RESULT
 ```
 

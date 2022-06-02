@@ -43,12 +43,12 @@
   "Talk about the weather
 
   (doctest-test--2 'cold)
-  -> It’s cold outside
+  >> It’s cold outside
   => brr
 
   (doctest-test--2 'hot)
-  -> It’s hot today
-  -> ... very hot!
+  >> It’s hot today
+  >> ... very hot!
   => pfew
   "
   (pcase temp
