@@ -139,7 +139,7 @@ docstring. Returns NIL if no doctest is found."
 
 (cl-defmacro doctest--with-around ((f advice) &body body)
   "Advise function F with ADVICE (around) only in the scope of this BODY"
-  (declare (indent 1))
+  (declare (indent defun))
   `(progn
      (advice-add ,f :around ,advice)
      (unwind-protect
