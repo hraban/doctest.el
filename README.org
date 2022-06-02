@@ -57,7 +57,9 @@ Use this format:
 => RESULT
 #+end_src
 
-All functions must exist in a file that provides a feature.
+The function(s) must have been evaluated before you can doctest it (i.e. =C-M-x=, aka =M-x eval-defun=, or =M-x eval-buffer=).
+
+The syntax is inspired by the [[http://clhs.lisp.se/][CLHS]].
 
 ** Running Tests
 
