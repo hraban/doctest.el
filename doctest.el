@@ -27,6 +27,7 @@
 
 ;;; Code:
 
+
 ;;;;
 ;;;; PARSING TESTS FROM DOCSTRINGS
 ;;;;
@@ -34,6 +35,7 @@
 (require 'cl-lib)
 (require 'dash)
 (require 'loadhist)
+(require 'org) ;; because of ‘org-read-function’
 
 (defvar doctest--test-start (rx bol (* " ") "("))
 
@@ -133,6 +135,7 @@ docstring. Returns NIL if no doctest is found."
   "Return tests in FUNCTION's docstring."
   (-some-> (documentation function 'raw) doctest--docstring-tests))
 
+
 ;;;;
 ;;;; RUNNING TESTS
 ;;;;
@@ -211,12 +214,49 @@ Includes macros.
                 (`(defun . ,func) func)))
        (cl-remove nil)))
 
+(defun doctest--extract-defun-name (sexp)
+  "If SEXP is “defun- or defmacro-esque”, extract the symbol name.
+
+Uses regex and heuristics to extract a symbol name, best effort.
+
+(doctest--extract-defun-name '(defun myfun (x) (* x x)))
+=> myfun
+
+(doctest--extract-defun-name '(+ 1 2))
+=> nil
+
+(doctest--extract-defun-name 44)
+=> nil
+"
+  (pcase sexp
+    (`(,(and (pred symbolp)
+             sym
+             (let (rx word-boundary "def") (symbol-name sym)))
+       ,name . ,rest)
+     (ignore rest sym)
+     name)))
+
+(defun doctest--defun-at-point-name ()
+  "If we’re on a defun (or defmacro, ...) extract the name symbol.
+
+Like (thing-at-point 'defun), but return only the name of the function being
+defined.
+"
+  (-some-> 'defun
+           thing-at-point
+           read
+           ignore-errors
+           doctest--extract-defun-name))
+
 (defun doctest-check-function (fsym)
   "Doctest a single function.
 
-Runs the tests in ERT.
+Runs the tests in ERT. When run interactively, uses heuristics to determine
+which function to run, or asks for input in the minibuffer if no candidate is
+found.
 "
-  (interactive "a")
+  (interactive (list (or (doctest--defun-at-point-name)
+                         (org-read-function "Function to test: "))))
   (doctest--ert-func fsym)
   (ert fsym))
 
